@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line Following Robot Emulator</title>
+<style>
+  body{margin:0;font-family:system-ui,sans-serif;background:#f4f4f6;color:#222;display:flex;flex-direction:column;align-items:center;padding:12px}
+  h1{font-size:1.2rem;margin:6px 0}
+  #bar{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap;justify-content:center}
+  button{padding:8px 14px;border:0;border-radius:6px;background:#2d6cdf;color:#fff;font-size:.95rem;cursor:pointer}
+  button.alt{background:#666}
+  #status{font-size:.9rem}
+  #pid{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.85rem;margin-bottom:6px}
+  #pid input{width:90px;vertical-align:middle}
+  canvas{background:#fff;border:1px solid #bbb;max-width:100%;height:auto;touch-action:none;cursor:crosshair}
+</style>
+</head>
+<body>
+<h1>Line Following Robot Emulator</h1>
+<div id="bar">
+  <button id="start">Start (Enter)</button>
+  <button id="reset" class="alt">Reset</button>
+  <span id="status">Draw a line with mouse/touch, then press Start.</span>
+</div>
+<div id="pid">
+  <label>Kp <input type="range" id="kp" min="0" max="5" step="0.1" value="1"> <b id="kpv">1.0</b></label>
+  <label>Ki <input type="range" id="ki" min="0" max="2" step="0.05" value="0"> <b id="kiv">0.00</b></label>
+  <label>Kd <input type="range" id="kd" min="0" max="2" step="0.05" value="0.2"> <b id="kdv">0.20</b></label>
+  <label>Speed <input type="range" id="sp" min="20" max="150" step="5" value="60"> <b id="spv">60</b></label>
+</div>
+<canvas id="c" width="700" height="700"></canvas>
+
+<script>
+const W = 700, H = 700, THRESHOLD = 120, LINE_WIDTH = 8;
+const FRAME = 220, SPRITE_SCALE = 0.25;
+let Kp = 1.0, Ki = 0.0, Kd = 0.2, baseSpeed = 60;
+const sensorOffset = 30, sensorSpacing = 10;
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const line = document.createElement('canvas'); line.width = W; line.height = H;
+const lc = line.getContext('2d', { willReadFrequently: true });
+const statusEl = document.getElementById('status');
+
+const img = new Image();
+img.src = 'LFR_body.png';   // keep this file next to index.html
+
+let robot, drawing, finished, hasLine, integral, prevError, last, sensors = [];
+
+function clearLine() {
+  lc.fillStyle = '#fff'; lc.fillRect(0, 0, W, H);
+  lc.strokeStyle = '#000'; lc.fillStyle = '#000';
+  lc.lineWidth = LINE_WIDTH; lc.lineCap = 'round'; lc.lineJoin = 'round';
+}
+function reset() {
+  robot = { x: 100, y: 100, angle: 0 };
+  drawing = true; finished = false; hasLine = false; integral = 0; prevError = 0; last = null;
+  clearLine();
+  statusEl.textContent = 'Draw a line with mouse/touch, then press Start.';
+}
+function start() {
+  if (!drawing) return;
+  if (!hasLine) { statusEl.textContent = 'Please draw a line first.'; return; }
+  drawing = false;
+  statusEl.textContent = 'Robot running...';
+}
+
+const deg2rad = d => d * Math.PI / 180;
+
+function readGray(x, y) {
+  x = Math.min(W - 1, Math.max(0, x | 0));
+  y = Math.min(H - 1, Math.max(0, y | 0));
+  const p = lc.getImageData(x, y, 1, 1).data;
+  return (p[0] + p[1] + p[2]) / 3;
+}
+
+// ---------- drawing input ----------
+function pos(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+cv.addEventListener('pointerdown', e => {
+  if (!drawing) return;
+  cv.setPointerCapture(e.pointerId);
+  last = pos(e); hasLine = true;
+  lc.beginPath(); lc.arc(last.x, last.y, LINE_WIDTH / 2, 0, 2 * Math.PI); lc.fill();
+});
+cv.addEventListener('pointermove', e => {
+  if (!drawing || !last) return;
+  const p = pos(e);
+  lc.beginPath(); lc.moveTo(last.x, last.y); lc.lineTo(p.x, p.y); lc.stroke();
+  last = p;
+});
+['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => last = null));
+document.addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
+document.getElementById('start').onclick = start;
+document.getElementById('reset').onclick = reset;
+
+// ---------- simulation ----------
+function update(dt) {
+  const fwd = deg2rad(robot.angle), perp = fwd + Math.PI / 2;
+  sensors = [-sensorSpacing, 0, sensorSpacing].map(o => ({
+    x: robot.x + Math.cos(fwd) * sensorOffset + Math.cos(perp) * o,
+    y: robot.y + Math.sin(fwd) * sensorOffset + Math.sin(perp) * o
+  }));
+  if (drawing || finished) return;
+
+  const d = sensors.map(s => readGray(s.x, s.y) < THRESHOLD ? 1 : 0);
+  const error = d[2] - d[0];
+  integral += error * dt;
+  const correction = Kp * error + Ki * integral + Kd * (error - prevError);
+  prevError = error;
+
+  const clamp = v => Math.min(255, Math.max(0, v));
+  const left = clamp(baseSpeed - correction * 50);
+  const right = clamp(baseSpeed + correction * 50);
+  const avg = (left + right) / 2;
+  const rot = (right - left) * 0.05;
+
+  robot.angle = (robot.angle + rot * dt * 180 / Math.PI + 360) % 360;
+  robot.x += avg * Math.cos(deg2rad(robot.angle)) * dt;
+  robot.y += avg * Math.sin(deg2rad(robot.angle)) * dt;
+
+  if (robot.x < 0 || robot.x > W || robot.y < 0 || robot.y > H) {
+    finished = true;
+    statusEl.textContent = 'Robot left the canvas. Press Reset to try again.';
+  }
+}
+
+// ---------- PID / speed sliders ----------
+[['kp', 'kpv', v => Kp = v, 1], ['ki', 'kiv', v => Ki = v, 2],
+ ['kd', 'kdv', v => Kd = v, 2], ['sp', 'spv', v => baseSpeed = v, 0]].forEach(([id, out, set, dp]) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    set(parseFloat(el.value));
+    document.getElementById(out).textContent = parseFloat(el.value).toFixed(dp);
+  });
+});
+
+function render() {
+  ctx.drawImage(line, 0, 0);
+  ctx.save();
+  ctx.translate(robot.x, robot.y);
+  ctx.rotate(deg2rad(robot.angle + 90));
+  ctx.scale(SPRITE_SCALE, SPRITE_SCALE);
+  if (img.complete && img.naturalWidth) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, FRAME, FRAME, -FRAME / 2, -FRAME / 2, FRAME, FRAME);
+  } else {                       // fallback if image is missing
+    ctx.fillStyle = '#8a9a3a'; ctx.beginPath(); ctx.arc(0, 0, 80, 0, 2 * Math.PI); ctx.fill();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#0c0';
+  sensors.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, 2 * Math.PI); ctx.fill(); });
+}
+
+let t0 = performance.now();
+function loop(t) {
+  const dt = Math.min(0.05, (t - t0) / 1000); t0 = t;
+  update(dt); render();
+  requestAnimationFrame(loop);
+}
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
