@@ -3,165 +3,651 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Line Following Robot Emulator</title>
+<title>Arduino Line Follower Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Hind+Siliguri:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  body{margin:0;font-family:system-ui,sans-serif;background:#f4f4f6;color:#222;display:flex;flex-direction:column;align-items:center;padding:12px}
-  h1{font-size:1.2rem;margin:6px 0}
-  #bar{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap;justify-content:center}
-  button{padding:8px 14px;border:0;border-radius:6px;background:#2d6cdf;color:#fff;font-size:.95rem;cursor:pointer}
-  button.alt{background:#666}
-  #status{font-size:.9rem}
-  #pid{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;font-size:.85rem;margin-bottom:6px}
-  #pid input{width:90px;vertical-align:middle}
-  canvas{background:#fff;border:1px solid #bbb;max-width:100%;height:auto;touch-action:none;cursor:crosshair}
+:root{--surface:#0b1326;--panel:#101a30;--field:#162038;--border:#222e4a;--border-strong:#5b6b91;--on:#dae2fd;--muted:#98a6c8;--primary:#2665fd;--primary-hover:#1d54e0;--primary-soft:rgba(38,101,253,.14);--focus:#6b86ff;--ok:#7ee0a1;--warn:#fbbf24;--error:#ffb4ab;--r:8px;--shadow-1:0 2px 8px rgba(0,0,0,.35);--shadow-2:0 8px 24px rgba(0,0,0,.45);--font:Inter,"Hind Siliguri","Noto Sans Bengali",system-ui,sans-serif;--mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,Consolas,monospace;color-scheme:dark}
+:root[data-theme=light]{color-scheme:light;--surface:#f4f6fb;--panel:#ffffff;--field:#eef1f8;--border:#dbe1ee;--border-strong:#7a88a8;--on:#0b1326;--muted:#4a5878;--primary-soft:rgba(38,101,253,.10);--focus:#2665fd;--ok:#15803d;--warn:#b45309;--error:#b91c1c;--shadow-1:0 2px 8px rgba(15,23,42,.12);--shadow-2:0 8px 24px rgba(15,23,42,.18)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface);color:var(--on);font:400 14px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:12px}
+.top-r{display:flex;align-items:center;gap:10px}
+.logo{width:36px;height:36px;border-radius:var(--r);background:var(--primary-soft);border:1px solid rgba(38,101,253,.4);display:grid;place-items:center;color:var(--focus)}
+h1{margin:0;font-size:15px;font-weight:600;line-height:1.2}
+.sub{margin:0;color:var(--muted);font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--field);font-size:12px;font-weight:500;white-space:nowrap}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.chip[data-s=running] i{background:var(--ok);box-shadow:0 0 0 3px rgba(126,224,161,.18);animation:pulse 1.6s ease-in-out infinite}
+.chip[data-s=error]{color:var(--error);border-color:color-mix(in srgb,var(--error) 40%,transparent)}
+.chip[data-s=error] i{background:var(--error)}
+.chip[data-s=done]{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.chip[data-s=done] i{background:var(--ok)}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(126,224,161,0)}}
+.up{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:2px 8px;border-radius:999px}
+.up[data-s=ok]{color:var(--ok)}.up[data-s=dirty]{color:var(--warn)}.up[data-s=err]{color:var(--error)}
+.up.flash{animation:flash .6s ease-out}
+@keyframes flash{from{background:color-mix(in srgb,var(--ok) 16%,transparent)}to{background:transparent}}
+.hint{font-size:12px;color:var(--muted)}
+.hint b{color:var(--on);font-weight:500}
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:20px;padding:20px 24px 28px;max-width:1320px;margin:0 auto;align-items:start}
+@media(min-width:981px){aside.panel{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r)}
+.label{margin:0;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stage-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.stage-head .label{margin-right:auto}
+.board-wrap{padding:16px}
+.board{position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);line-height:0;background:#fff}
+canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
+canvas.locked{cursor:not-allowed!important}
+.toolhint{position:absolute;left:10px;top:10px;padding:5px 10px;border-radius:999px;background:rgba(11,19,38,.88);color:var(--on);font:500 12px/1.2 var(--font);pointer-events:none;transition:opacity .2s}
+.toolhint.hide{opacity:0}
+.empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;line-height:1.4;transition:opacity .2s}
+.empty.hide{opacity:0}
+.empty div{max-width:300px;padding:10px 16px;border-radius:var(--r);background:rgba(11,19,38,.9);font-size:13px;text-align:center}
+.empty small{display:block;color:var(--muted);font-size:12px}
+section.block{padding:16px;border-bottom:1px solid var(--border)}
+section.block:last-child{border-bottom:0}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+button,select,input[type=text],input[type=number]{font:500 13px var(--font);height:34px;border-radius:var(--r);color:var(--on);outline:none}
+button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 14px;border:1px solid var(--border-strong);background:transparent;cursor:pointer;transition:background .15s,transform .15s}
+button:hover{background:rgba(91,107,145,.22)}
+button:active{background:rgba(91,107,145,.35)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.on{background:var(--field);border-color:var(--on)}
+button.sm{height:28px;padding:0 10px;font-size:12px}
+button.danger:hover{color:var(--error)}
+#run{flex:1;background:var(--primary);border-color:var(--primary);color:#fff}
+#run:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+#run:active{transform:scale(.98)}
+.ic{flex:none}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--primary-soft);border-color:var(--border);box-shadow:inset 0 -2px 0 var(--primary)}
+select,input[type=text],input[type=number]{background:var(--field);border:1px solid var(--border-strong);padding:0 10px;width:100%}
+input.bad{border-color:var(--error)}
+select{width:auto}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.actions{display:flex;gap:8px}
+.editor{position:relative;display:flex;border:1px solid var(--border-strong);border-radius:var(--r);overflow:hidden;background:var(--field)}
+.editor:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.gutter{position:absolute;left:0;top:0;bottom:0;width:46px;overflow:hidden;padding:12px 8px 12px 0;text-align:right;font:12.5px/20px var(--mono);color:var(--muted);background:var(--panel);border-right:1px solid var(--border);user-select:none}
+.gutter .ln{height:20px}.gutter .ln.err{color:var(--error);font-weight:600}
+.errline{position:absolute;left:46px;right:0;height:20px;background:color-mix(in srgb,var(--error) 20%,transparent);border-left:2px solid var(--error);pointer-events:none}
+textarea{flex:1;min-width:0;height:360px;resize:vertical;background:transparent;color:var(--on);border:0;border-radius:0;padding:12px 12px 12px 58px;font:12.5px/20px var(--mono);tab-size:2;white-space:pre;overflow:auto;outline:none}
+textarea:focus-visible{outline:none}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px}
+.grid label{font-size:12px;color:var(--muted);display:block}
+.grid label input{margin-top:4px;color:var(--on)}
+.grp{grid-column:1/-1;margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.grp:first-child{margin-top:0}
+.full{grid-column:1/-1}
+.hwerr{margin:8px 0 0;font-size:12px;color:var(--error)}
+.hwerr:empty{display:none}
+.check{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
+.sensors{display:flex;gap:6px;margin-bottom:10px;counter-reset:s}
+.sensor{flex:1;height:26px;border-radius:var(--r);border:1px solid var(--border-strong);background:var(--field);display:grid;place-items:center;font-size:10px;color:var(--muted)}
+.sensor::after{counter-increment:s;content:counter(s)}
+.sensor.on{background:var(--on);border-color:var(--on);color:var(--surface)}
+.motors{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:10px;font-variant-numeric:tabular-nums}
+.motors b{color:var(--on);font-weight:500}
+.motors b.neg{color:var(--warn)}
+pre{margin:0;height:130px;overflow:auto;resize:vertical;background:var(--field);border:1px solid var(--border-strong);border-radius:var(--r);padding:10px 12px;font:12px/1.5 var(--mono);color:var(--on);white-space:pre-wrap}
+pre .e{color:var(--error)}pre .s{color:var(--ok)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);padding:10px 16px;border-radius:var(--r);background:var(--field);border:1px solid var(--border-strong);box-shadow:var(--shadow-2);font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:980px){
+  .workspace{grid-template-columns:1fr;padding:16px}.topbar{padding:12px 16px}.sub{display:none}
+  body{padding-bottom:76px}
+  button,select,input[type=text],input[type=number]{height:40px}button.sm{height:40px}
+  .stage-head{flex-wrap:nowrap;overflow-x:auto}.stage-head>*{flex:none}
+  section.runbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--border);border-bottom:0;padding:8px 16px calc(8px + env(safe-area-inset-bottom))}
+  .toast{bottom:88px}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<h1>Line Following Robot Emulator</h1>
-<div id="bar">
-  <button id="start">Start (Enter)</button>
-  <button id="reset" class="alt">Reset</button>
-  <span id="status">Draw a line with mouse/touch, then press Start.</span>
-</div>
-<div id="pid">
-  <label>Kp <input type="range" id="kp" min="0" max="5" step="0.1" value="1"> <b id="kpv">1.0</b></label>
-  <label>Ki <input type="range" id="ki" min="0" max="2" step="0.05" value="0"> <b id="kiv">0.00</b></label>
-  <label>Kd <input type="range" id="kd" min="0" max="2" step="0.05" value="0.2"> <b id="kdv">0.20</b></label>
-  <label>Speed <input type="range" id="sp" min="20" max="150" step="5" value="60"> <b id="spv">60</b></label>
-</div>
-<canvas id="c" width="700" height="700"></canvas>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c4 0 4-12 9-12s4 12 9 12"/><circle cx="12" cy="6" r="1.5" fill="currentColor"/></svg></div>
+    <div><h1>Arduino Line Follower Simulator</h1><p class="sub">Paste your Arduino code, draw a track, see how the robot behaves</p></div>
+  </div>
+  <div class="top-r"><button id="theme" class="sm" aria-label="Switch theme" title="Switch theme"></button>
+  <div class="chip" id="chip" data-s="ready" role="status"><i></i><span id="status">Ready</span></div></div>
+</header>
+
+<main class="workspace">
+  <section class="panel">
+    <div class="stage-head">
+      <p class="label">Track</p>
+      <div class="seg" role="group" aria-label="Track tools">
+        <button id="tDraw" class="sm on" aria-pressed="true" title="Draw track (D)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Draw</button>
+        <button id="tPlace" class="sm" aria-pressed="false" title="Place robot (P)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Robot</button>
+        <button id="tFinish" class="sm" aria-pressed="false" title="Finish line (F)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg>Finish</button>
+      </div>
+      <button id="finClear" class="sm danger" title="Remove finish line"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>Finish</button>
+      <button id="tGrid" class="sm" aria-pressed="false" title="Grid overlay (G)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Grid</button>
+      <select id="preset" aria-label="Preset track"><option value="">Presets</option><option value="oval">Oval loop</option><option value="wave">Wavy line</option><option value="corners">90° corners</option></select>
+      <button id="clear" class="sm danger" title="Clear track"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>Clear</button>
+    </div>
+    <div class="board-wrap"><div class="board">
+      <canvas id="c" width="700" height="700" role="img" aria-label="Line follower track and robot"></canvas>
+      <div class="toolhint" id="toolHint"></div>
+      <div class="empty" id="empty"><div>Draw a track or pick a preset<small>Then press Run</small></div></div>
+    </div>
+    <p class="hint" id="finInfo" style="margin:10px 0 0"></p>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <section class="block runbar">
+      <div class="actions">
+        <button id="run" title="Run / Pause (Space)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/></svg>Run</button>
+        <button id="reset" title="Reset (R)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.7 3L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
+        <select id="mult" aria-label="Simulation speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="head"><p class="label">Arduino code</p><div class="actions"><button id="openIno" class="sm"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/></svg>Open .ino</button></div></div>
+      <input type="file" id="file" accept=".ino,.cpp,.c,.h,.txt" hidden>
+      <div class="editor"><div class="gutter" id="gutter" aria-hidden="true"></div><div class="errline" id="errLine" hidden></div><textarea id="code" wrap="off" spellcheck="false" aria-label="Arduino code"></textarea></div>
+      <div class="actions" style="margin-top:10px;align-items:center"><button id="upload" class="sm" title="Upload to board (U)"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Upload to board</button><span class="up" id="upBadge" data-s="no" role="status">○ Not uploaded</span></div>
+    </section>
+
+    <section class="block" id="hw">
+      <p class="label" style="margin-bottom:12px">Hardware mapping</p>
+      <div class="grid">
+        <p class="grp">Sensors</p>
+        <label class="full">Sensor pins, left to right<input type="text" id="sPins" value="A0, A1, A2, A3, A4" placeholder="A0, A1, A2, A3, A4"></label>
+        <p class="grp">Left motor</p>
+        <label>Left EN<input type="text" id="lEn" value="5"></label>
+        <label>Left IN1<input type="text" id="lA" value="6"></label>
+        <label>Left IN2<input type="text" id="lB" value="7"></label>
+        <p class="grp">Right motor</p>
+        <label>Right EN<input type="text" id="rEn" value="10"></label>
+        <label>Right IN1<input type="text" id="rA" value="8"></label>
+        <label>Right IN2<input type="text" id="rB" value="9"></label>
+        <p class="grp">Robot</p>
+        <label>Sensor gap (px)<input type="number" id="gap" value="12" min="2" max="40"></label>
+        <label>Sensor ahead (px)<input type="number" id="ahead" value="30" min="5" max="80"></label>
+        <label>Max speed (px/s)<input type="number" id="vmax" value="220" min="20" max="600"></label>
+      </div>
+      <p class="hwerr" id="hwErr" role="alert"></p>
+      <label class="check"><input type="checkbox" id="hi" checked> Sensor reads HIGH on the black line</label>
+    </section>
+
+    <section class="block">
+      <p class="label" style="margin-bottom:12px">Monitor</p>
+      <div class="sensors" id="sensRow"></div>
+      <div class="motors"><span>Left motor <b id="mL">0</b></span><span>Right motor <b id="mR">0</b></span><span>Time <b id="tm">0.0s</b></span></div>
+      <div class="head" style="margin:0 0 8px"><span class="hint">Serial monitor</span><div class="actions"><button id="asc" class="sm on" aria-pressed="true" title="Keep the newest line in view">Autoscroll</button><button id="serClear" class="sm">Clear</button></div></div>
+      <pre id="serial" aria-label="Serial monitor"></pre>
+    </section>
+  </aside>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-const W = 700, H = 700, THRESHOLD = 120, LINE_WIDTH = 8;
-const FRAME = 220, SPRITE_SCALE = 0.25;
-let Kp = 1.0, Ki = 0.0, Kd = 0.2, baseSpeed = 60;
-const sensorOffset = 30, sensorSpacing = 10;
+const EXAMPLE = `// 5-sensor PID line follower with L298N
+const int sensorPins[5] = {A0, A1, A2, A3, A4};
+const int weights[5] = {-4, -2, 0, 2, 4};
 
-const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-const line = document.createElement('canvas'); line.width = W; line.height = H;
-const lc = line.getContext('2d', { willReadFrequently: true });
-const statusEl = document.getElementById('status');
+#define ENA 5
+#define IN1 6
+#define IN2 7
+#define ENB 10
+#define IN3 8
+#define IN4 9
 
-const img = new Image();
-img.src = 'LFR_body.png';   // keep this file next to index.html
+float Kp = 30.0, Ki = 0.0, Kd = 40.0;
+float error = 0, lastError = 0, integral = 0;
+int baseSpeed = 140;
 
-let robot, drawing, finished, hasLine, integral, prevError, last, sensors = [];
-
-function clearLine() {
-  lc.fillStyle = '#fff'; lc.fillRect(0, 0, W, H);
-  lc.strokeStyle = '#000'; lc.fillStyle = '#000';
-  lc.lineWidth = LINE_WIDTH; lc.lineCap = 'round'; lc.lineJoin = 'round';
-}
-function reset() {
-  robot = { x: 100, y: 100, angle: 0 };
-  drawing = true; finished = false; hasLine = false; integral = 0; prevError = 0; last = null;
-  clearLine();
-  statusEl.textContent = 'Draw a line with mouse/touch, then press Start.';
-}
-function start() {
-  if (!drawing) return;
-  if (!hasLine) { statusEl.textContent = 'Please draw a line first.'; return; }
-  drawing = false;
-  statusEl.textContent = 'Robot running...';
+void setup() {
+  Serial.begin(9600);
+  for (int i = 0; i < 5; i++) pinMode(sensorPins[i], INPUT);
+  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
 }
 
-const deg2rad = d => d * Math.PI / 180;
-
-function readGray(x, y) {
-  x = Math.min(W - 1, Math.max(0, x | 0));
-  y = Math.min(H - 1, Math.max(0, y | 0));
-  const p = lc.getImageData(x, y, 1, 1).data;
-  return (p[0] + p[1] + p[2]) / 3;
+void drive(int l, int r) {
+  l = constrain(l, -255, 255);
+  r = constrain(r, -255, 255);
+  digitalWrite(IN1, l >= 0); digitalWrite(IN2, l < 0);
+  digitalWrite(IN3, r >= 0); digitalWrite(IN4, r < 0);
+  analogWrite(ENA, abs(l));
+  analogWrite(ENB, abs(r));
 }
 
-// ---------- drawing input ----------
-function pos(e) {
-  const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
-}
-cv.addEventListener('pointerdown', e => {
-  if (!drawing) return;
-  cv.setPointerCapture(e.pointerId);
-  last = pos(e); hasLine = true;
-  lc.beginPath(); lc.arc(last.x, last.y, LINE_WIDTH / 2, 0, 2 * Math.PI); lc.fill();
-});
-cv.addEventListener('pointermove', e => {
-  if (!drawing || !last) return;
-  const p = pos(e);
-  lc.beginPath(); lc.moveTo(last.x, last.y); lc.lineTo(p.x, p.y); lc.stroke();
-  last = p;
-});
-['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => last = null));
-document.addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
-document.getElementById('start').onclick = start;
-document.getElementById('reset').onclick = reset;
-
-// ---------- simulation ----------
-function update(dt) {
-  const fwd = deg2rad(robot.angle), perp = fwd + Math.PI / 2;
-  sensors = [-sensorSpacing, 0, sensorSpacing].map(o => ({
-    x: robot.x + Math.cos(fwd) * sensorOffset + Math.cos(perp) * o,
-    y: robot.y + Math.sin(fwd) * sensorOffset + Math.sin(perp) * o
-  }));
-  if (drawing || finished) return;
-
-  const d = sensors.map(s => readGray(s.x, s.y) < THRESHOLD ? 1 : 0);
-  const error = d[2] - d[0];
-  integral += error * dt;
-  const correction = Kp * error + Ki * integral + Kd * (error - prevError);
-  prevError = error;
-
-  const clamp = v => Math.min(255, Math.max(0, v));
-  const left = clamp(baseSpeed - correction * 50);
-  const right = clamp(baseSpeed + correction * 50);
-  const avg = (left + right) / 2;
-  const rot = (right - left) * 0.05;
-
-  robot.angle = (robot.angle + rot * dt * 180 / Math.PI + 360) % 360;
-  robot.x += avg * Math.cos(deg2rad(robot.angle)) * dt;
-  robot.y += avg * Math.sin(deg2rad(robot.angle)) * dt;
-
-  if (robot.x < 0 || robot.x > W || robot.y < 0 || robot.y > H) {
-    finished = true;
-    statusEl.textContent = 'Robot left the canvas. Press Reset to try again.';
+void loop() {
+  int sum = 0, active = 0;
+  for (int i = 0; i < 5; i++) {
+    if (analogRead(sensorPins[i]) > 512) { sum += weights[i]; active++; }
   }
+  if (active > 0) error = (float)sum / active;   // line lost: keep last error
+  integral += error;
+  float correction = Kp * error + Ki * integral + Kd * (error - lastError);
+  lastError = error;
+  drive(baseSpeed + correction, baseSpeed - correction);
+  Serial.println(error);
+  delay(5);
+}
+`;
+
+// ---------- Arduino C++ -> JavaScript (common subset) ----------
+//<T
+const TYPES = 'int|long|float|double|byte|bool|boolean|char|short|word|String|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t';
+function transpile(src) {
+  const S = [];
+  let c = src.replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, m => (S.push(m), `__S${S.length - 1}__`));
+  c = c.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, m => m.replace(/[^\n]/g, ''));   // keep line count so error lines match
+  c = c.replace(/^[ \t]*#define[ \t]+(\w+)[ \t]+(.+?)[ \t]*$/gm, 'const $1 = $2;').replace(/^[ \t]*#.*$/gm, '');
+  const T = `(?:unsigned\\s+)?(?:${TYPES})`, Q = '(?:const\\s+|static\\s+|volatile\\s+)*';
+  c = c.replace(new RegExp(`\\b${Q}${T}\\s+(\\w+)\\s*\\[[^\\]]*\\]\\s*=\\s*\\{([^;]*?)\\}\\s*;`, 'g'), 'let $1 = [$2];');
+  c = c.replace(new RegExp(`\\b${Q}${T}\\s+(\\w+)\\s*\\[\\s*(\\w+)\\s*\\]\\s*;`, 'g'), 'let $1 = new Array($2).fill(0);');
+  c = c.replace(new RegExp(`\\b(?:void|${T})\\s+(\\w+)\\s*\\(([^)]*)\\)\\s*\\{`, 'g'),
+    (m, n, p) => `function ${n}(${p.replace(new RegExp(`(?:const\\s+)?${T}\\s*[&*]?\\s*(\\w+)`, 'g'), '$1').replace(/\bvoid\b/, '')}){`);
+  c = c.replace(/\((?:int|long|byte|uint8_t|uint16_t)\)\s*\(/g, 'Math.trunc(')
+       .replace(/\((?:int|long|byte)\)\s*(\w+)/g, 'Math.trunc($1)')
+       .replace(/\((?:float|double)\)\s*/g, '');
+  c = c.replace(new RegExp(`\\b${Q}${T}\\s+(?=[A-Za-z_])`, 'g'), 'let ');
+  c = c.replace(/\bwhile\s*\(/g, 'while(__tick(),');
+  return c.replace(/__S(\d+)__/g, (m, i) => S[i]);
+}
+function compile(src, api) {
+  const names = Object.keys(api);
+  const body = transpile(src) + '\n;return {setup: typeof setup==="function"?setup:null, loop: typeof loop==="function"?loop:null};\n//# sourceURL=sketch';
+  return new Function(...names, body)(...names.map(n => api[n]));
+}
+//T>
+
+// ---------- state ----------
+const W = 700, H = 700, LINE_WIDTH = 8, B = 40;
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+const lc = document.createElement('canvas'); lc.width = W; lc.height = H;
+const tc = lc.getContext('2d', { willReadFrequently: true });
+let tool = 'draw', startPose = { x: 80, y: 350, a: 0 }, robot = { ...startPose }, trail = [];
+let hasLine = false, last = null, running = false, prog = null, C = null;
+let simMs = 0, simTarget = 0, acc = 0, ticks = 0, uL = 0, uR = 0, pins = {}, trackData = null;
+let lines = [], cur = '';
+let finished = false, fin = null, finDraft = null, finData = null, finCover = true, uploadedSrc = null, upText = '';
+const STOP = { stop: true };
+let finDrag = null;
+
+const parsePin = s => { s = s.trim(); if (!s) return null; const m = /^A(\d)$/i.exec(s); return m ? 14 + +m[1] : parseInt(s, 10); };
+const cfg = () => ({
+  sp: $('sPins').value.split(',').map(parsePin).filter(p => p != null && !isNaN(p)),
+  L: ['lEn', 'lA', 'lB'].map(i => parsePin($(i).value)), R: ['rEn', 'rA', 'rB'].map(i => parsePin($(i).value)),
+  high: $('hi').checked, gap: +$('gap').value || 12, ahead: +$('ahead').value || 30, vmax: +$('vmax').value || 220
+});
+C = cfg();
+
+const ICO = d => '<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const runLabel = t => { $('run').innerHTML = ICO(t === 'Pause' ? '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>' : '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/>') + t; };
+let toastT = 0;
+function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2400); }
+const locked = () => { setStatus('Press Reset to edit', 'ready'); toast('Press Reset to edit'); };
+function setStatus(t, s) { $('status').textContent = t; $('chip').dataset.s = s; }
+function log(t, err) { lines.push(err ? { e: t } : t); if (lines.length > 200) lines.shift(); }
+
+// ---------- sensors & physics ----------
+function sensorPos(i) {
+  const n = C.sp.length, lat = (i - (n - 1) / 2) * C.gap, a = robot.a;
+  return { x: robot.x + Math.cos(a) * C.ahead - Math.sin(a) * lat, y: robot.y + Math.sin(a) * C.ahead + Math.cos(a) * lat };
+}
+function gray(x, y) {
+  x |= 0; y |= 0;
+  if (!trackData || x < 0 || y < 0 || x >= W || y >= H) return 255;
+  const k = (y * W + x) * 4; return (trackData[k] + trackData[k + 1] + trackData[k + 2]) / 3;
+}
+function analogVal(pin) {
+  const i = C.sp.indexOf(pin); if (i < 0) return 0;
+  const p = sensorPos(i), dark = (255 - gray(p.x, p.y)) / 255;
+  return Math.round((C.high ? dark : 1 - dark) * 1023);
+}
+const motorU = ([en, a, b]) => {
+  const d = Math.max(-1, Math.min(1, ((pins[a] || 0) - (pins[b] || 0)) / 255));
+  return en == null ? d : d * ((pins[en] || 0) / 255);
+};
+function frontPt() { return { x: robot.x + Math.cos(robot.a) * C.ahead, y: robot.y + Math.sin(robot.a) * C.ahead }; }
+const cross = (a, b, p) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+function crossedFinish(p, q) {                           // did sensor-array centre cross the finish segment this step?
+  if (p.x === q.x && p.y === q.y) return false;
+  return cross(fin.a, fin.b, p) * cross(fin.a, fin.b, q) <= 0 && cross(p, q, fin.a) * cross(p, q, fin.b) <= 0;
+}
+function onFinish() {
+  finished = true; running = false; uL = uR = 0;
+  runLabel('Run'); setStatus('Finished ✓ ' + (simMs / 1000).toFixed(1) + 's', 'done');
+  log('— Finish line reached at ' + (simMs / 1000).toFixed(2) + ' s —');
+}
+function step(dt) {
+  if (finished) return;
+  const p0 = frontPt();
+  const k = 1 - Math.exp(-dt / 0.06);                     // motor response lag
+  uL += (motorU(C.L) - uL) * k; uR += (motorU(C.R) - uR) * k;
+  const vl = uL * C.vmax, vr = uR * C.vmax, v = (vl + vr) / 2;
+  robot.a += (vl - vr) / B * dt;                          // left faster => turns right (screen coords)
+  robot.x += v * Math.cos(robot.a) * dt; robot.y += v * Math.sin(robot.a) * dt;
+  if (fin && crossedFinish(p0, frontPt())) onFinish();
+}
+function advance(ms) {
+  simMs += ms; acc += ms;
+  while (acc >= 0.5) { const s = Math.min(acc, 2); step(s / 1000); acc -= s; }
+}
+const tick = ms => { if (++ticks > 400000) throw new Error('Possible infinite loop (no delay or exit condition)'); advance(ms); if (finished) throw STOP; };
+
+// ---------- Arduino API ----------
+const sp = (s, d, nl) => {
+  s = typeof s === 'number' && !Number.isInteger(s) ? s.toFixed(typeof d === 'number' && d >= 0 && d <= 6 ? d : 2) : String(s);
+  cur += s; if (nl) { log(cur); cur = ''; }
+};
+const api = {
+  HIGH: 1, LOW: 0, INPUT: 0, OUTPUT: 1, INPUT_PULLUP: 2, DEC: 10, HEX: 16, BIN: 2, PI: Math.PI,
+  A0: 14, A1: 15, A2: 16, A3: 17, A4: 18, A5: 19, A6: 20, A7: 21,
+  pinMode() {}, digitalWrite: (p, v) => { pins[p] = v ? 255 : 0; },
+  analogWrite: (p, v) => { pins[p] = Math.max(0, Math.min(255, v)); },
+  digitalRead: p => { tick(0.005); return analogVal(p) > 512 ? 1 : 0; },
+  analogRead: p => { tick(0.11); return analogVal(p); },
+  delay: ms => tick(ms), delayMicroseconds: us => tick(us / 1000),
+  millis: () => Math.floor(simMs), micros: () => Math.floor(simMs * 1000),
+  constrain: (x, a, b) => Math.min(b, Math.max(a, x)),
+  map: (x, a, b, c, d) => Math.trunc((x - a) * (d - c) / (b - a) + c),
+  abs: Math.abs, min: Math.min, max: Math.max, pow: Math.pow, sqrt: Math.sqrt, sq: x => x * x,
+  random: (a, b) => b == null ? Math.floor(Math.random() * a) : a + Math.floor(Math.random() * (b - a)),
+  Serial: { begin() {}, print: (s, d) => sp(s, d, false), println: (s, d) => sp(s, d, true) },
+  __tick: () => tick(0.01)
+};
+
+// ---------- run control ----------
+function resetSim() {
+  running = false; finished = false; errLine && setErrLine(0); prog = null; trackData = null; trail = []; pins = {}; uL = uR = 0; simMs = simTarget = acc = 0;
+  robot = { ...startPose }; C = cfg(); buildSens();
+  runLabel('Run'); setStatus('Ready', 'ready');
+}
+let autoScroll = true;
+function setAuto(v) { autoScroll = v; $('asc').classList.toggle('on', v); $('asc').setAttribute('aria-pressed', String(v)); if (v) $('serial').scrollTop = $('serial').scrollHeight; }
+$('asc').onclick = () => setAuto(!autoScroll);
+$('serClear').onclick = () => { lines = []; cur = ''; $('serial').innerHTML = ''; };
+$('serial').addEventListener('scroll', e => { const el = e.target; const near = el.scrollHeight - el.scrollTop - el.clientHeight < 8; if (near !== autoScroll) setAuto(near); });
+let errLine = 0, gutN = -1;
+function updGutter() {
+  const n = $('code').value.split('\n').length;
+  if (n !== gutN || gutN < 0) { gutN = n; $('gutter').innerHTML = Array.from({ length: n }, (_, i) => '<div class="ln' + (i + 1 === errLine ? ' err' : '') + '">' + (i + 1) + '</div>').join(''); }
+  $('gutter').scrollTop = $('code').scrollTop; posErr();
+}
+function posErr() {
+  const el = $('errLine'), ta = $('code'); if (!errLine) { el.hidden = true; return; }
+  const y = 12 + (errLine - 1) * 20 - ta.scrollTop; el.hidden = y < -20 || y > ta.clientHeight; el.style.top = y + 'px';
+}
+function setErrLine(n) {
+  errLine = n; gutN = -1; updGutter();
+  if (n) { const ta = $('code'), y = (n - 1) * 20; if (y < ta.scrollTop || y > ta.scrollTop + ta.clientHeight - 40) ta.scrollTop = Math.max(0, y - 60); updGutter(); }
+}
+const lineOf = e => { const m = /sketch:(\d+):\d+/.exec((e && e.stack) || ''); return m ? Math.max(1, +m[1] - 2) : 0; };
+function failAt(msg, e) { const n = lineOf(e); if (n) setErrLine(n); fail(msg + (n ? ' (line ' + n + ')' : '')); }
+function fail(msg) { running = false; log(msg, true); runLabel('Run'); setStatus('Error', 'error'); }
+function run() {
+  if (running) { running = false; runLabel('Run'); setStatus('Paused', 'ready'); return; }
+  if (finished) resetSim();
+  if (!prog) {
+    if (!hasLine) { setStatus('Draw a track first', 'error'); toast('Draw a track first, or pick a preset'); return; }
+    if (!validateHw()) { setStatus('Fix hardware pins', 'error'); toast('Fix the highlighted hardware pins'); return; }
+    C = cfg(); buildSens();
+    if (!C.sp.length) { setStatus('Add sensor pins', 'error'); return; }
+    lines = []; cur = ''; trail = []; pins = {}; uL = uR = 0; simMs = simTarget = acc = ticks = 0; robot = { ...startPose };
+    trackData = tc.getImageData(0, 0, W, H).data;
+    try { prog = compile($('code').value, api); if (prog.setup) prog.setup(); }
+    catch (e) { prog = null; return failAt('Compile/setup error: ' + e.message, e); }
+    if (!prog.loop) { prog = null; return fail('No loop() function found.'); }
+    if ($('code').value !== uploadedSrc) upload(true);
+  }
+  running = true; runLabel('Pause'); setStatus('Running', 'running');
 }
 
-// ---------- PID / speed sliders ----------
-[['kp', 'kpv', v => Kp = v, 1], ['ki', 'kiv', v => Ki = v, 2],
- ['kd', 'kdv', v => Kd = v, 2], ['sp', 'spv', v => baseSpeed = v, 0]].forEach(([id, out, set, dp]) => {
-  const el = document.getElementById(id);
-  el.addEventListener('input', () => {
-    set(parseFloat(el.value));
-    document.getElementById(out).textContent = parseFloat(el.value).toFixed(dp);
-  });
+// ---------- code upload ----------
+function setUp(st, t) { const b = $('upBadge'); b.dataset.s = st; b.textContent = t; b.classList.remove('flash'); if (st === 'ok') { void b.offsetWidth; b.classList.add('flash'); } }
+function upload(auto) {
+  const src = $('code').value;
+  if (!auto && prog) resetSim();
+  try {
+    const p = compile(src, api);
+    if (!p.loop) throw new Error('No loop() function found.');
+  } catch (e) {
+    const ln = lineOf(e); if (ln) setErrLine(ln); setUp('err', '✕ Upload failed'); log('Upload failed: ' + e.message + (ln ? ' (line ' + ln + ')' : ''), true); setStatus('Upload failed', 'error'); return false;
+  }
+  uploadedSrc = src;
+  upText = '✓ Uploaded ' + new Date().toLocaleTimeString([], { hour12: false }) + ' · ' + src.split('\n').length + ' lines';
+  setUp('ok', upText);
+  if (!auto) { log('Sketch uploaded ✓ Press Run.'); setStatus('Code uploaded', 'ready'); }
+  return true;
+}
+$('upload').onclick = () => upload(false);
+$('code').addEventListener('scroll', () => { $('gutter').scrollTop = $('code').scrollTop; posErr(); });
+$('code').addEventListener('input', () => {
+  if (errLine) errLine = 0; updGutter();
+  if (uploadedSrc === null) return;
+  $('code').value === uploadedSrc ? setUp('ok', upText) : setUp('dirty', '● Edited — upload again');
 });
+$('openIno').onclick = () => $('file').click();
+$('file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => { $('code').value = t; errLine = 0; updGutter(); upload(false); }); e.target.value = '';
+};
 
-function render() {
-  ctx.drawImage(line, 0, 0);
-  ctx.save();
-  ctx.translate(robot.x, robot.y);
-  ctx.rotate(deg2rad(robot.angle + 90));
-  ctx.scale(SPRITE_SCALE, SPRITE_SCALE);
-  if (img.complete && img.naturalWidth) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0, FRAME, FRAME, -FRAME / 2, -FRAME / 2, FRAME, FRAME);
-  } else {                       // fallback if image is missing
-    ctx.fillStyle = '#8a9a3a'; ctx.beginPath(); ctx.arc(0, 0, 80, 0, 2 * Math.PI); ctx.fill();
+// ---------- finish line ----------
+const finLen = s => Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
+function coversLine(s) {
+  const L = finLen(s); if (!finData || L < 1) return false;
+  for (let t = 0; t <= L; t += 2) {
+    const x = (s.a.x + (s.b.x - s.a.x) * t / L) | 0, y = (s.a.y + (s.b.y - s.a.y) * t / L) | 0;
+    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+    const k = (y * W + x) * 4; if ((finData[k] + finData[k + 1] + finData[k + 2]) / 3 < 128) return true;
+  }
+  return false;
+}
+function updFinInfo() {
+  const el = $('finInfo');
+  if (!fin) { el.innerHTML = 'Finish line: <b>none</b>. Choose the Finish tool, then drag across the track.'; return; }
+  const L = finLen(fin), sw = (C.sp.length - 1) * C.gap;
+  el.innerHTML = 'Finish line: <b>' + Math.round(L) + ' px</b> (' + (L / sw).toFixed(1) + '× sensor width)' + (finCover ? '' : ' — ⚠ does not touch the track') + ' · drag to move, drag the ends to resize';
+}
+let showGrid = false;
+function drawGrid() {
+  ctx.save(); ctx.lineWidth = 1;
+  for (let v = 0; v <= W; v += 50) {
+    ctx.strokeStyle = v % 100 ? 'rgba(100,116,139,.18)' : 'rgba(100,116,139,.38)';
+    ctx.beginPath(); ctx.moveTo(v + .5, 0); ctx.lineTo(v + .5, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, v + .5); ctx.lineTo(W, v + .5); ctx.stroke();
+  }
+  ctx.font = '600 11px Inter, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  const t = 'Grid · 50 px', w = ctx.measureText(t).width + 14;
+  ctx.fillStyle = 'rgba(11,19,38,.88)'; ctx.beginPath(); ctx.roundRect(W - w - 8, H - 28, w, 20, 5); ctx.fill();
+  ctx.fillStyle = '#dae2fd'; ctx.fillText(t, W - w - 1, H - 18);
+  ctx.restore();
+}
+function setGrid(v) { showGrid = v; $('tGrid').classList.toggle('on', v); $('tGrid').setAttribute('aria-pressed', String(v)); }
+$('tGrid').onclick = () => setGrid(!showGrid);
+function hitFin(p) {
+  if (Math.hypot(p.x - fin.a.x, p.y - fin.a.y) < 14) return 'a';
+  if (Math.hypot(p.x - fin.b.x, p.y - fin.b.y) < 14) return 'b';
+  const dx = fin.b.x - fin.a.x, dy = fin.b.y - fin.a.y, L2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - fin.a.x) * dx + (p.y - fin.a.y) * dy) / L2));
+  return Math.hypot(p.x - (fin.a.x + t * dx), p.y - (fin.a.y + t * dy)) < 14 ? 'move' : null;
+}
+function drawFin(s, edit) {
+  const L = finLen(s); if (L < 1) return;
+  const ang = Math.atan2(s.b.y - s.a.y, s.b.x - s.a.x), T = 18, cell = 9;
+  ctx.save(); ctx.translate(s.a.x, s.a.y); ctx.rotate(ang);
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(0, -T / 2, L, T, 5); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.save(); ctx.beginPath(); ctx.roundRect(0, -T / 2, L, T, 5); ctx.clip();
+  for (let i = 0; i * cell < L; i++) for (let j = 0; j < 2; j++) {
+    ctx.fillStyle = (i + j) % 2 ? '#fff' : '#0b1326'; ctx.fillRect(i * cell, -T / 2 + j * cell, cell, cell);
   }
   ctx.restore();
-  ctx.fillStyle = '#0c0';
-  sensors.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, 2 * Math.PI); ctx.fill(); });
+  ctx.strokeStyle = '#0b1326'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(0, -T / 2, L, T, 5); ctx.stroke();
+  ctx.restore();
+  if (!edit) return;
+  const sw = (C.sp.length - 1) * C.gap, ok = finCover && L >= 20;
+  const txt = Math.round(L) + ' px · ' + (L / sw).toFixed(1) + '× sensor width' + (ok ? '' : ' · ⚠ cross the track line');
+  ctx.save(); ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  const w = ctx.measureText(txt).width + 16;
+  const x = Math.min(Math.max((s.a.x + s.b.x) / 2 - w / 2, 4), W - w - 4), y = Math.max((s.a.y + s.b.y) / 2 - 40, 4);
+  ctx.fillStyle = 'rgba(11,19,38,.94)'; ctx.beginPath(); ctx.roundRect(x, y, w, 24, 6); ctx.fill();
+  ctx.fillStyle = ok ? '#7ee0a1' : '#fbbf24'; ctx.fillText(txt, x + 8, y + 12);
+  [s.a, s.b].forEach(p => { ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2665fd'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); });
+  ctx.restore();
+}
+
+// ---------- drawing & placing ----------
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
+function initPen() { tc.strokeStyle = tc.fillStyle = '#000'; tc.lineWidth = LINE_WIDTH; tc.lineCap = tc.lineJoin = 'round'; }
+function clearTrack() { tc.fillStyle = '#fff'; tc.fillRect(0, 0, W, H); initPen(); hasLine = false; fin = null; updFinInfo(); $('empty').classList.remove('hide'); }
+cv.addEventListener('pointerdown', e => {
+  if (prog) { locked(); return; }
+  cv.setPointerCapture(e.pointerId); last = pos(e);
+  if (tool === 'finish') {
+    finData = tc.getImageData(0, 0, W, H).data;
+    const h = fin && hitFin(last);
+    if (h) { finDrag = { mode: h, start: last, a0: { ...fin.a }, b0: { ...fin.b } }; cv.style.cursor = h === 'move' ? 'move' : 'grabbing'; return; }
+    finDraft = { a: last, b: last }; finCover = false; return;
+  }
+  if (tool === 'place') { startPose = { x: last.x, y: last.y, a: startPose.a }; robot = { ...startPose }; return; }
+  hasLine = true; $('empty').classList.add('hide');
+  tc.beginPath(); tc.arc(last.x, last.y, LINE_WIDTH / 2, 0, 2 * Math.PI); tc.fill();
+});
+cv.addEventListener('pointermove', e => {
+  if (tool === 'finish' && !last && fin && !prog) { const h = hitFin(pos(e)); cv.style.cursor = h === 'move' ? 'move' : h ? 'grab' : 'crosshair'; }
+  if (!last || prog) return; const p = pos(e);
+  if (tool === 'finish') {
+    if (finDrag) {
+      const d = finDrag, cl = v => Math.max(0, Math.min(W, v)), dx = p.x - d.start.x, dy = p.y - d.start.y;
+      if (d.mode === 'a') fin.a = { x: cl(d.a0.x + dx), y: cl(d.a0.y + dy) };
+      else if (d.mode === 'b') fin.b = { x: cl(d.b0.x + dx), y: cl(d.b0.y + dy) };
+      else { fin.a = { x: cl(d.a0.x + dx), y: cl(d.a0.y + dy) }; fin.b = { x: cl(d.b0.x + dx), y: cl(d.b0.y + dy) }; }
+      finCover = coversLine(fin); updFinInfo();
+    } else if (finDraft) { finDraft.b = p; finCover = coversLine(finDraft); }
+    return;
+  }
+  if (tool === 'place') { if (Math.hypot(p.x - startPose.x, p.y - startPose.y) > 8) { startPose.a = Math.atan2(p.y - startPose.y, p.x - startPose.x); robot = { ...startPose }; } return; }
+  tc.beginPath(); tc.moveTo(last.x, last.y); tc.lineTo(p.x, p.y); tc.stroke(); last = p;
+});
+['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => {
+  if (finDrag) { finDrag = null; finData = null; updFinInfo(); cv.style.cursor = 'grab'; }
+  if (finDraft) { if (finLen(finDraft) >= 20) { fin = { a: finDraft.a, b: finDraft.b }; updFinInfo(); } finDraft = null; finData = null; }
+  last = null;
+}));
+const HINTS = { draw: 'Draw: drag to draw the line', place: 'Robot: click to place, drag to set direction', finish: 'Finish: drag to draw · drag the line or its ends to adjust' };
+function setTool(t) {
+  tool = t; cv.style.cursor = 'crosshair'; $('toolHint').textContent = HINTS[t];
+  [['tDraw', 'draw'], ['tPlace', 'place'], ['tFinish', 'finish']].forEach(([id, n]) => { $(id).classList.toggle('on', t === n); $(id).setAttribute('aria-pressed', String(t === n)); });
+}
+$('tDraw').onclick = () => setTool('draw'); $('tPlace').onclick = () => setTool('place'); $('tFinish').onclick = () => setTool('finish');
+$('finClear').onclick = () => { if (prog) { locked(); return; } fin = null; updFinInfo(); };
+$('clear').onclick = () => { resetSim(); clearTrack(); };
+$('preset').onchange = e => {
+  const v = e.target.value; if (!v) return; resetSim(); clearTrack(); tc.beginPath();
+  if (v === 'oval') { tc.ellipse(350, 350, 250, 170, 0, 0, 2 * Math.PI); startPose = { x: 350, y: 180, a: 0 }; }
+  if (v === 'wave') { for (let x = 60; x <= 640; x += 4) { const y = 350 + 130 * Math.sin((x - 60) / 580 * 4 * Math.PI); x === 60 ? tc.moveTo(x, y) : tc.lineTo(x, y); } startPose = { x: 60, y: 350, a: Math.atan(130 * 4 * Math.PI / 580) }; }
+  if (v === 'corners') { [[60, 120], [300, 120], [300, 300], [520, 300], [520, 520], [650, 520]].forEach((p, i) => i ? tc.lineTo(...p) : tc.moveTo(...p)); startPose = { x: 60, y: 120, a: 0 }; }
+  tc.stroke(); hasLine = true; $('empty').classList.add('hide'); robot = { ...startPose }; e.target.value = '';
+  finCover = true;
+  if (v === 'wave') { const u = (625 - 60) / 580 * 4 * Math.PI, y = 350 + 130 * Math.sin(u), n = Math.atan(130 * Math.cos(u) * 4 * Math.PI / 580) + Math.PI / 2, h = 45;
+    fin = { a: { x: 625 - Math.cos(n) * h, y: y - Math.sin(n) * h }, b: { x: 625 + Math.cos(n) * h, y: y + Math.sin(n) * h } }; }
+  if (v === 'corners') fin = { a: { x: 615, y: 480 }, b: { x: 615, y: 560 } };
+  updFinInfo();
+};
+$('run').onclick = run; $('reset').onclick = resetSim;
+function validateHw() {
+  const bad = [], mark = (id, name, ok) => { const el = $(id); el.classList.toggle('bad', !ok); el.setAttribute('aria-invalid', String(!ok)); if (!ok) bad.push(name); };
+  const items = $('sPins').value.split(',').map(x => x.trim()).filter(Boolean);
+  mark('sPins', 'Sensor pins', items.length > 0 && items.every(x => !isNaN(parsePin(x))));
+  [['lEn', 'Left EN', 0], ['lA', 'Left IN1', 1], ['lB', 'Left IN2', 1], ['rEn', 'Right EN', 0], ['rA', 'Right IN1', 1], ['rB', 'Right IN2', 1]].forEach(([id, n, req]) => {
+    const v = $(id).value.trim(); mark(id, n, req ? v !== '' && !isNaN(parsePin(v)) : v === '' || !isNaN(parsePin(v)));
+  });
+  $('hwErr').textContent = bad.length ? 'Check: ' + bad.join(', ') + ' — use a number like 6 or A0' : '';
+  return !bad.length;
+}
+$('hw').addEventListener('input', () => { validateHw(); if (!prog) { C = cfg(); buildSens(); } });
+$('mult').onchange = () => {};
+$('code').addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return; e.preventDefault();
+  const t = e.target, s = t.selectionStart; t.value = t.value.slice(0, s) + '  ' + t.value.slice(t.selectionEnd); t.selectionStart = t.selectionEnd = s + 2;
+});
+
+// ---------- render ----------
+function buildSens() { $('sensRow').innerHTML = C.sp.map(() => '<div class="sensor"></div>').join(''); }
+function render() {
+  ctx.drawImage(lc, 0, 0);
+  if (showGrid) drawGrid();
+  if (fin) drawFin(fin, tool === 'finish' && !prog);
+  if (finDraft) drawFin(finDraft, true);
+  if (trail.length > 1) {
+    ctx.strokeStyle = 'rgba(38,101,253,.65)'; ctx.lineWidth = 2; ctx.beginPath();
+    trail.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+  }
+  ctx.save(); ctx.translate(robot.x, robot.y); ctx.rotate(robot.a);
+  ctx.fillStyle = '#0b1326'; ctx.beginPath(); ctx.roundRect(-15, -22, 16, 6, 2); ctx.roundRect(-15, 16, 16, 6, 2); ctx.fill();
+  ctx.fillStyle = '#1c2742'; ctx.beginPath(); ctx.roundRect(-17, -16, 38, 32, 6); ctx.fill();
+  ctx.fillStyle = '#2665fd'; ctx.beginPath(); ctx.moveTo(24, 0); ctx.lineTo(14, -7); ctx.lineTo(14, 7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  C.sp.forEach((_, i) => {
+    const p = sensorPos(i), on = gray(p.x, p.y) < 128;
+    ctx.fillStyle = on ? '#16a34a' : '#fff'; ctx.strokeStyle = '#1c2742'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  });
+}
+let uiT = 0;
+function updateUI(t) {
+  if (t - uiT < 100) return; uiT = t;
+  [...$('sensRow').children].forEach((d, i) => { const p = sensorPos(i); d.classList.toggle('on', !!prog && gray(p.x, p.y) < 128); });
+  $('mL').textContent = Math.round(uL * 255); $('mR').textContent = Math.round(uR * 255);
+  $('mL').classList.toggle('neg', uL < -0.01); $('mR').classList.toggle('neg', uR < -0.01);
+  cv.classList.toggle('locked', !!prog); $('toolHint').classList.toggle('hide', !!prog);
+  $('tm').textContent = (simMs / 1000).toFixed(1) + 's';
+  const el = $('serial'), all = lines.slice(-60);
+  el.innerHTML = all.map(l => typeof l === 'string' ? (/^(—|Sketch uploaded)/.test(l) ? '<span class="s">' + l.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' : l.replace(/&/g, '&amp;').replace(/</g, '&lt;')) : '<span class="e">' + l.e.replace(/</g, '&lt;') + '</span>').join('\n');
+  if (autoScroll) el.scrollTop = el.scrollHeight;
 }
 
 let t0 = performance.now();
-function loop(t) {
+function frame(t) {
   const dt = Math.min(0.05, (t - t0) / 1000); t0 = t;
-  update(dt); render();
-  requestAnimationFrame(loop);
+  if (running) {
+    simTarget += dt * 1000 * parseFloat($('mult').value); ticks = 0;
+    try { while (running && simMs < simTarget) { prog.loop(); tick(0.05); } }
+    catch (e) { if (e !== STOP) failAt('Runtime error: ' + e.message, e); }
+    trail.push([robot.x, robot.y]); if (trail.length > 8000) trail.shift();
+    if (running && (robot.x < 0 || robot.x > W || robot.y < 0 || robot.y > H)) { running = false; runLabel('Run'); setStatus('Robot left the area', 'error'); }
+  }
+  render(); updateUI(t); requestAnimationFrame(frame);
 }
-reset();
-requestAnimationFrame(loop);
+const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', MOON = '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>';
+function applyTheme(t, save) {
+  document.documentElement.dataset.theme = t;
+  $('theme').innerHTML = ICO(t === 'light' ? MOON : SUN); $('theme').title = $('theme').ariaLabel = t === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+  if (save) try { localStorage.setItem('lfr-theme', t); } catch (e) {}
+}
+let savedTheme = null; try { savedTheme = localStorage.getItem('lfr-theme'); } catch (e) {}
+applyTheme(savedTheme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'), false);
+$('theme').onclick = () => applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light', true);
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { if (e.target.tagName === 'BUTTON') return; e.preventDefault(); run(); }
+  else if (k === 'r') resetSim(); else if (k === 'u') upload(false);
+  else if (k === 'd') setTool('draw'); else if (k === 'p') setTool('place'); else if (k === 'f') setTool('finish'); else if (k === 'g') setGrid(!showGrid);
+  else if (e.key === 'Escape') setTool('draw');
+});
+$('code').value = EXAMPLE; clearTrack(); buildSens(); setTool('draw'); runLabel('Run'); validateHw(); updGutter(); requestAnimationFrame(frame);
 </script>
 </body>
 </html>
